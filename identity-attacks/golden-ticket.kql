@@ -1,0 +1,51 @@
+// ============================================================
+// Query: Golden Ticket Attack Detection
+// Author: Etienne Moreau
+// GitHub: github.com/Etienne-Moreau1
+// Description: Detects potential Golden Ticket attacks by
+//              identifying anomalous Kerberos ticket usage.
+//              Golden Ticket = forged Kerberos TGT using
+//              compromised KRBTGT account hash.
+//              Attacker has unlimited, persistent AD access.
+// MITRE ATT&CK: T1558.001 - Golden Ticket
+// Tactic: Credential Access / Lateral Movement
+// Data Source: SecurityEvent (Windows Event Logs)
+// ============================================================
+
+SecurityEvent
+| where TimeGenerated > ago(1h)
+| where EventID == 4769                          // Kerberos Service Ticket request
+| where TicketEncryptionType == "0x17"           // RC4 encryption = suspicious
+| where TicketOptions == "0x40810000"            // Anomalous ticket options
+| where IpAddress !in ("::1", "127.0.0.1")      // Exclude localhost
+| summarize
+    RequestCount = count(),
+    TargetAccounts = make_set(TargetUserName),
+    SourceIPs = make_set(IpAddress)
+    by Computer, Account
+| where RequestCount > 5
+| sort by RequestCount desc
+| project
+    Computer,
+    Account,
+    RequestCount,
+    TargetAccounts,
+    SourceIPs
+
+// ============================================================
+// Tuning Notes:
+// - EventID 4769 = Kerberos Service Ticket Operations
+// - RC4 (0x17) encryption is legacy and suspicious in
+//   modern environments using AES encryption
+// - Golden Ticket indicators:
+//   → RC4 encryption when AES is enforced
+//   → Ticket lifetime > 10 hours (default max)
+//   → Requests from unusual accounts
+// - Suggested severity: Critical
+//
+// Remediation if Golden Ticket confirmed:
+// 1. Reset KRBTGT password TWICE (48h apart)
+// 2. Invalidate all existing Kerberos tickets
+// 3. Force re-authentication for all users
+// 4. Investigate KRBTGT compromise timeline
+// ============================================================
