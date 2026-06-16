@@ -1,0 +1,35 @@
+// ============================================================
+// Query: Brute Force Detection
+// Author: Etienne Moreau
+// GitHub: github.com/Etienne-Moreau1
+// Description: Detects accounts with excessive failed 
+//              sign-in attempts within a 1-hour window.
+//              Threshold: > 10 failures per user.
+// MITRE ATT&CK: T1110 - Brute Force
+// Tactic: Credential Access
+// Data Source: SigninLogs (Azure AD / Microsoft Entra ID)
+// ============================================================
+
+SigninLogs
+| where TimeGenerated > ago(1h)
+| where ResultType != 0                          // Failed sign-ins only
+| summarize 
+    FailureCount = count(),
+    IPList = make_set(IPAddress),
+    LocationList = make_set(Location)
+    by UserPrincipalName
+| where FailureCount > 10
+| sort by FailureCount desc
+| project 
+    UserPrincipalName,
+    FailureCount,
+    IPList,
+    LocationList
+
+// ============================================================
+// Tuning Notes:
+// - Adjust threshold (> 10) based on your environment
+// - Add | where Location != "YourCountry" to filter noise
+// - Recommended scheduling: every 1h, lookup last 1h
+// - Suggested severity: High
+// ============================================================
