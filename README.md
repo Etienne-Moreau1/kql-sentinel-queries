@@ -4,7 +4,7 @@ A curated collection of KQL (Kusto Query Language) queries for Microsoft Sentine
 
 Built from real-world SOC experience and Microsoft SC-200 certification preparation.
 
-## 👤 About
+##  About
 
 **Etienne Moreau** | Support Center Team Lead → Aspiring SOC Analyst  
 📜 SC-200 | SC-900 | MS-900 | AZ-900 | Security+ | Network+  
@@ -15,7 +15,7 @@ Built from real-world SOC experience and Microsoft SC-200 certification preparat
 
 ---
 
-## 📁 Repository Structure
+##  Repository Structure
 kql-sentinel-queries/
 
 ├── identity-attacks/
@@ -46,9 +46,9 @@ kql-sentinel-queries/
 
 ---
 
-## 🔍 Query Categories
+##  Query Categories
 
-### 🔐 Identity Attacks
+### Identity Attacks
 Detection rules for common identity-based attacks targeting Azure AD / Microsoft Entra ID.
 
 | Query | Description | MITRE Tactic |
@@ -58,7 +58,7 @@ Detection rules for common identity-based attacks targeting Azure AD / Microsoft
 | impossible-travel.kql | Flags sign-ins from 2+ countries within 1 hour | Initial Access |
 | golden-ticket.kql | Detects anomalous Kerberos ticket usage | Lateral Movement |
 
-### 🌐 Threat Intelligence
+### Threat Intelligence
 Correlation queries matching logs against threat intelligence indicators.
 
 | Query | Description | MITRE Tactic |
@@ -66,7 +66,7 @@ Correlation queries matching logs against threat intelligence indicators.
 | malicious-ip-correlation.kql | Cross-references SigninLogs with ThreatIntelligenceIndicator | Initial Access |
 | threat-intel-signin.kql | Detects sign-ins from known malicious IPs | Initial Access |
 
-### 💻 Endpoint
+### Endpoint
 Detection rules for suspicious activity on devices via Microsoft Defender for Endpoint.
 
 | Query | Description | MITRE Tactic |
@@ -74,7 +74,7 @@ Detection rules for suspicious activity on devices via Microsoft Defender for En
 | suspicious-process.kql | Detects child processes spawned by Office applications | Execution |
 | lateral-movement.kql | Identifies Pass-the-Hash and lateral movement patterns | Lateral Movement |
 
-### 🚨 Incident Response
+### Incident Response
 Queries designed for active incident investigation and threat hunting.
 
 | Query | Description |
@@ -83,7 +83,7 @@ Queries designed for active incident investigation and threat hunting.
 
 ---
 
-## 🚀 How to Use
+## How to Use
 
 1. Open **Microsoft Sentinel** or **Azure Log Analytics**
 2. Navigate to **Logs**
@@ -92,7 +92,7 @@ Queries designed for active incident investigation and threat hunting.
 
 ---
 
-## 📌 Example Query — Password Spray Detection
+##  Example Query — Password Spray Detection
 
 ```kql
 SigninLogs
@@ -117,7 +117,7 @@ SigninLogs
 
 ---
 
-## 📈 Roadmap
+##  Roadmap
 
 - [x] Identity attack queries
 - [x] Threat intelligence correlation
@@ -128,7 +128,7 @@ SigninLogs
 
 ---
 
-## 📄 License
+##  License
 
 MIT License — Feel free to use, modify, and share with attribution.
 
