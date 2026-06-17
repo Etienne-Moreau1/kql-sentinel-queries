@@ -1,0 +1,56 @@
+// ============================================================
+// Query: Malicious IP Correlation
+// Author: Etienne Moreau
+// GitHub: github.com/Etienne-Moreau1
+// Description: Cross-references SigninLogs against Microsoft
+//              Threat Intelligence indicators to identify
+//              sign-in attempts from known malicious IPs.
+//              Uses join to correlate two data sources.
+// MITRE ATT&CK: T1078 - Valid Accounts
+// Tactic: Initial Access
+// Data Source: SigninLogs + ThreatIntelligenceIndicator
+// ============================================================
+
+SigninLogs
+| where TimeGenerated > ago(24h)
+| where isnotempty(IPAddress)
+| join kind=inner (
+    ThreatIntelligenceIndicator
+    | where TimeGenerated > ago(14d)
+    | where isnotempty(NetworkIP)
+    | where Active == true
+    | where ConfidenceScore >= 50             // Filter low confidence IOCs
+    | project NetworkIP, ThreatType, ConfidenceScore, Description
+) on $left.IPAddress == $right.NetworkIP
+| summarize
+    SigninCount = count(),
+    UserList = make_set(UserPrincipalName),
+    ResultTypes = make_set(ResultType)
+    by IPAddress, ThreatType, ConfidenceScore, Description
+| sort by ConfidenceScore desc
+| project
+    IPAddress,
+    ThreatType,
+    ConfidenceScore,
+    Description,
+    SigninCount,
+    UserList,
+    ResultTypes
+
+// ============================================================
+// Tuning Notes:
+// - Active == true filters expired indicators
+// - ConfidenceScore >= 50 reduces false positives
+//   Adjust based on your risk tolerance
+// - ResultType 0 = successful sign-in from malicious IP!
+//   → Immediate investigation required
+// - Recommended scheduling: every 1h, lookup last 24h
+// - Suggested severity: High to Critical
+//
+// Investigation Steps:
+// 1. Check ResultTypes — any 0 (success) = critical!
+// 2. Review UserList — are these privileged accounts?
+// 3. Check ThreatType — C2, Malware, Phishing?
+// 4. Correlate with AzureActivity for post-auth actions
+// 5. Consider blocking IP via Defender Threat Intelligence
+// ============================================================
