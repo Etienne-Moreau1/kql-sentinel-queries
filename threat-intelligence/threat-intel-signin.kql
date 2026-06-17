@@ -1,0 +1,63 @@
+// ============================================================
+// Query: Threat Intelligence Sign-in Detection
+// Author: Etienne Moreau
+// GitHub: github.com/Etienne-Moreau1
+// Description: Searches across multiple log sources simultaneously
+//              using union to detect any activity from known
+//              malicious IPs in threat intelligence feeds.
+//              Broader coverage than single-table correlation.
+// MITRE ATT&CK: T1078 - Valid Accounts
+// Tactic: Initial Access / Defense Evasion
+// Data Source: SigninLogs + AzureActivity + ThreatIntelligenceIndicator
+// ============================================================
+
+// Step 1: Get malicious IPs from Threat Intelligence
+let MaliciousIPs = ThreatIntelligenceIndicator
+    | where TimeGenerated > ago(14d)
+    | where isnotempty(NetworkIP)
+    | where Active == true
+    | where ConfidenceScore >= 50
+    | distinct NetworkIP, ThreatType, ConfidenceScore;
+
+// Step 2: Search across multiple tables simultaneously
+union SigninLogs, AzureActivity
+| where TimeGenerated > ago(24h)
+| where isnotempty(IPAddress)
+| join kind=inner MaliciousIPs
+    on $left.IPAddress == $right.NetworkIP
+| summarize
+    EventCount = count(),
+    EventTypes = make_set($table),             // Which tables had hits
+    UserList = make_set(
+        iff(isnotempty(UserPrincipalName), 
+            UserPrincipalName, 
+            Caller)                            // Handle different column names
+    )
+    by IPAddress, ThreatType, ConfidenceScore
+| sort by EventCount desc
+| project
+    IPAddress,
+    ThreatType,
+    ConfidenceScore,
+    EventCount,
+    EventTypes,
+    UserList
+
+// ============================================================
+// Tuning Notes:
+// - `let` statement creates reusable variable (cleaner code)
+// - union searches SigninLogs AND AzureActivity simultaneously
+// - $table column shows which source detected the activity
+// - UserPrincipalName = SigninLogs column
+//   Caller = AzureActivity column (different schemas!)
+// - iff() handles the column name difference gracefully
+// - Add more tables to union as needed:
+//   union SigninLogs, AzureActivity, OfficeActivity
+// - Recommended scheduling: every 1h, lookup last 24h
+// - Suggested severity: High
+//
+// Why union vs multiple queries:
+// → Single query = better performance
+// → Correlated results = easier investigation
+// → One alert instead of many
+// ============================================================
