@@ -1,0 +1,116 @@
+// ============================================================
+// Query: Adversary-in-the-Middle (AiTM) Phishing Detection
+// Author: Etienne Moreau
+// GitHub: github.com/Etienne-Moreau1
+// Description: Detects potential AiTM phishing attacks where
+//              attackers proxy authentication to steal session
+//              tokens AFTER MFA completion, bypassing 2FA entirely.
+//
+//              Attack Flow:
+//              1. User clicks phishing link
+//              2. Proxy site forwards credentials + MFA to real IdP
+//              3. Real IdP returns session token to proxy
+//              4. Attacker steals session token
+//              5. Attacker uses token from different IP/location
+//
+//              Key Indicator: Successful auth followed by
+//              token use from a DIFFERENT IP address
+//
+// MITRE ATT&CK: T1557 - Adversary-in-the-Middle
+//               T1539 - Steal Web Session Cookie
+//               T1621 - Multi-Factor Authentication Request Generation
+// Tactic: Credential Access / Collection
+// Data Source: SigninLogs (Azure AD / Microsoft Entra ID)
+// Tools Used by Attackers: Evilginx2, Modlishka, Muraena
+// ============================================================
+
+// Step 1: Identify successful MFA sign-ins
+let SuccessfulMFASignins = SigninLogs
+    | where TimeGenerated > ago(1h)
+    | where ResultType == 0                      // Successful sign-in
+    | where AuthenticationRequirement == "multiFactorAuthentication"
+    | where isnotempty(IPAddress)
+    | project
+        TimeGenerated,
+        UserPrincipalName,
+        SigninIP = IPAddress,
+        SigninLocation = Location,
+        SessionId = CorrelationId,
+        UserAgent,
+        AppDisplayName;
+
+// Step 2: Identify subsequent token usage from different IP
+let TokenUsage = SigninLogs
+    | where TimeGenerated > ago(2h)
+    | where ResultType == 0
+    | where AuthenticationRequirement == "singleFactorAuthentication" // No MFA = token reuse!
+    | where isnotempty(IPAddress)
+    | project
+        TimeGenerated,
+        UserPrincipalName,
+        TokenIP = IPAddress,
+        TokenLocation = Location,
+        SessionId = CorrelationId,
+        AppDisplayName;
+
+// Step 3: Correlate - same user, different IP within short window
+SuccessfulMFASignins
+| join kind=inner TokenUsage
+    on UserPrincipalName
+| where SigninIP != TokenIP                      // Different IPs = suspicious!
+| where TokenLocation != SigninLocation          // Different locations
+| where datetime_diff(
+    'minute',
+    TokenUsage_TimeGenerated,
+    TimeGenerated) between (1 .. 60)             // Token used within 60 min
+| project
+    MFA_SigninTime = TimeGenerated,
+    TokenUseTime = TokenUsage_TimeGenerated,
+    UserPrincipalName,
+    SigninIP,
+    SigninLocation,
+    TokenIP,
+    TokenLocation,
+    AppDisplayName,
+    TimeDiff_Minutes = datetime_diff(
+        'minute',
+        TokenUsage_TimeGenerated,
+        TimeGenerated)
+| sort by TimeDiff_Minutes asc
+
+// ============================================================
+// Tuning Notes:
+// - singleFactorAuthentication after MFA = token reuse indicator
+// - Different IP between MFA auth and token use = AiTM signal
+// - Time window (60 min) adjustable based on environment
+// - False positives: VPN changes, split tunneling
+//   → Whitelist known corporate VPN IPs
+// - Suggested severity: Critical
+//
+// AiTM Tools Detected:
+// → Evilginx2: Most common, targets M365/Google
+// → Modlishka: Open source reverse proxy
+// → Muraena: Similar to Evilginx
+//
+// Investigation Steps:
+// 1. Verify with user if they clicked a link recently
+// 2. Check SigninIP reputation (VirusTotal, Shodan)
+// 3. Review activity AFTER token use in AzureActivity
+// 4. Check for inbox rules created (email forwarding!)
+// 5. Review OAuth app permissions granted
+// 6. Check for MFA method changes
+//
+// Immediate Remediation:
+// 1. Revoke all active sessions:
+//    Revoke-AzureADUserAllRefreshToken -ObjectId <UserID>
+// 2. Reset password immediately
+// 3. Re-enroll MFA
+// 4. Review and remove suspicious inbox rules
+// 5. Check for OAuth apps granted during attack window
+//
+// Prevention:
+// → Enable Conditional Access: Require compliant device
+// → Deploy FIDO2 / Passkeys (phishing-resistant MFA)
+// → Microsoft Entra ID Protection risk policies
+// → Token protection in Conditional Access (Preview)
+// ============================================================
